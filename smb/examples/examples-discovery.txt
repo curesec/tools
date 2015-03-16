@@ -1,0 +1,88 @@
+# ./smb-discovery.py -h
+usage: smb-discovery.py [-h]
+                        (-hostname HOSTNAME | -ip IP | -ipnetwork IPNETWORK | -iprange IPRANGE | -ipfile IPFILE)
+                        [-port PORT | -portrange PORTRANGE | -portfile PORTFILE]
+                        [-listshares] [-timeout TIMEOUT] [-v]
+
+If no ports are specified, ports 139 and 445 are scanned.
+Use -listshares to list shares when enabled null sessions are found.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -hostname HOSTNAME    e.g. example.com
+  -ip IP                e.g. 192.168.0.1
+  -ipnetwork IPNETWORK  e.g. 192.168.0.0/24
+  -iprange IPRANGE      e.g. 192.168.0.1-192.168.0.254
+  -ipfile IPFILE        e.g. ips.txt
+  -port PORT            e.g. 139
+  -portrange PORTRANGE  e.g. 1-1000
+  -portfile PORTFILE    e.g. ports.txt
+  -listshares           list SMB shares
+  -timeout TIMEOUT      default 5
+  -v
+
+
+
+
+
+# ./smb-discovery.py -ipnetwork 192.168.170.0/24 -timeout 1
+SMB active [null session enabled]: 192.168.170.91:139
+SMB active [null session enabled]: 192.168.170.91:445
+SMB active [null session enabled]: 192.168.170.95:139
+SMB active [null session enabled]: 192.168.170.95:445
+SMB active [null session disabled]: 192.168.170.112:445
+SMB active [null session enabled]: 192.168.170.205:139
+SMB active [null session enabled]: 192.168.170.205:445
+SMB active [null session disabled]: 192.168.170.223:445
+
+
+
+
+# cat ips.txt 
+192.168.170.91
+192.168.170.95
+192.168.170.112
+192.168.170.205
+192.168.170.223
+
+# ./smb-discovery.py -ipfile ips.txt -port 445 -listshares -timeout 1
+SMB active [null session enabled]: 192.168.170.91:445
+share: curesec-pub
+   comments: Curesec Public Directory
+   type: Disk
+   isSpecial: False
+   isTemporary: False
+share: printer
+   comments: printer
+   type: Disk
+   isSpecial: False
+   isTemporary: False
+share: IPC$
+   comments: IPC Service (NAS01)
+   type: IPC
+   isSpecial: True
+   isTemporary: False
+SMB active [null session enabled]: 192.168.170.95:445
+share: curesec-pub
+   comments: Curesec Public Directory
+   type: Disk
+   isSpecial: False
+   isTemporary: False
+share: printer
+   comments: printer
+   type: Disk
+   isSpecial: False
+   isTemporary: False
+share: IPC$
+   comments: IPC Service (NAS01)
+   type: IPC
+   isSpecial: True
+   isTemporary: False
+SMB active [null session disabled]: 192.168.170.112:445
+SMB active [null session enabled]: 192.168.170.205:445
+share: IPC$
+   comments: IPC Service (Samba Server)
+   type: IPC
+   isSpecial: True
+   isTemporary: False
+SMB active [null session disabled]: 192.168.170.223:445

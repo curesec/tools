@@ -1,0 +1,92 @@
+# ./smb-file-sharing.py -h
+usage: smb-file-sharing.py [-h] -ip IP -port PORT -username USERNAME -password
+                           PASSWORD [-domain DOMAIN]
+                           (-listshares | -listsnapshots share remotepath | -listpath share remotepath | -retrievefile share remotepath localpath | -retrievefilefromoffset share remotepath localpath offset maxlength | -storefile share localpath remotepath | -rename share oldpath newpath | -delete share remotepath | -deletedirectory share remotepath)
+                           [-timeout TIMEOUT] [-v]
+
+-listsnapshots is only supported on Windows Vista and Windows 7.
+When using -retrievefilefromoffset, set maxlength to -1 to read until EOF.
+When testing, -rename worked only on Windows systems
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -ip IP                e.g. 192.168.0.1
+  -port PORT            e.g. 139
+  -username USERNAME    e.g. administrator
+  -password PASSWORD    e.g. secret
+  -domain DOMAIN        e.g. WORKGROUP
+  -listshares
+  -listsnapshots share remotepath
+  -listpath share remotepath
+  -retrievefile share remotepath localpath
+  -retrievefilefromoffset share remotepath localpath offset maxlength
+  -storefile share localpath remotepath
+  -rename share oldpath newpath
+  -delete share remotepath
+  -deletedirectory share remotepath
+  -timeout TIMEOUT      default 5
+  -v
+
+
+
+
+
+# ./smb-file-sharing.py -ip 192.168.170.205 -port 445 -username samba_user -password password -listshares
+authentication successful
+share: IPC$
+   comments: IPC Service (Samba Server)
+   type: IPC
+   isSpecial: True
+   isTemporary: False
+share: samba_user
+   comments: Home Directories
+   type: Disk
+   isSpecial: False
+   isTemporary: False
+
+
+
+
+
+
+# ./smb-file-sharing.py -ip 192.168.170.205 -port 445 -username samba_user -password password -listpath samba_user /
+authentication successful
+dir:  .
+dir:  ..
+file: .bashrc   [141]
+file: .bash_logout   [21]
+file: .xinitrc   [312]
+file: .bash_history   [83]
+file: test.txt   [4]
+file: storefile.txt   [4]
+file: .xsession   [100]
+dir:  testdir
+dir:  .vim
+file: .bash_profile   [57]
+file: .screenrc   [3729]
+file: retrievefile.txt   [4]
+file: .viminfo   [2232]
+
+
+# ./smb-file-sharing.py -ip 192.168.170.205 -port 445 -username samba_user -password password -getattributes samba_user .bashrc -v
+authentication successful
+alloc_size:            1048576 bytes
+create_time:           1405499648.17
+file_attributes:       2
+file_size:             141 bytes
+filename:              .bashrc
+isDirectory:           False
+isReadOnly:            False
+last_access_time:      1405670250.36
+last_attr_change_time: 1405499648.17
+last_write_time:       1405499648.17
+short_name:            .bashr
+
+
+
+
+
+
+# ./smb-file-sharing.py -ip 192.168.170.205 -port 445 -username samba_user -password password -retrievefile samba_user test.txt test.txt
+authentication successful
+file download complete

