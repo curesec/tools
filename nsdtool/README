@@ -1,0 +1,60 @@
+nsdtool  - netgear switch discovery tool
+========================================
+
+-= Abstract =-
+
+This is a toolset of scripts used for discovering of netgear switches in
+local networks. The tool consists of some extra features like bruteforce
+and setting a new password. Netgear has its own protocol called NSDP Netgear Switch
+Discovery Protocol, which is humbly implemented to support security
+tests on the commandline and not being bound to the delivered tools by Netgear.
+Find more information about the Netgear Switch Discovery Protocol here:
+http://en.wikipedia.org/wiki/Netgear_NSDP
+
+-= Usage =-
+
+Define your interface and possible delay in the config.ini.
+
+# cat config.ini 
+[NSDP]
+SourcePort = 63323				<--- nsdp source
+DestPort = 63324				<--- nsdp dest
+Interface = eth0				<--- your network interface
+DestIP = 255.255.255.255		
+Delay = 0.01					<--- interval delay
+
+-= How to find switches supporting the NSDP? =-
+
+Set the nsdtool in shell one in sniffer mode
+# ./main.py -s
+
+Set the nsdtool in shell two in discovery mode
+# ./main.py -d -t 192.168.1.0/24
+
+If a Netgear device supporting the protocol was found the output on the
+sniffer side looks sort like this:
+
+Version : 4 IP Header Length : 5 TTL : 64 Protocol : 17 Source Address :
+192.168.1.2 Destination Address : 192.168.1.3
+Source Port : 63324 Dest Port : 63323 Length : 143 Checksum : 35212
+protocol: NSDP
+device: GS100
+mac: 31:XX:XX:XX:XX:XX
+firmware version: 5.3.2
+default gateway: 192.168.1.1
+switch ip: 192.168.1.2
+subnet mask: 255.255.255.0
+
+-= Set a new password =-
+
+# ./main.py -m 31:XX:XX:XX:XX:XX -sp -cp currentpassword -np mynewpassword
+
+-= Bruteforce the password =-
+
+# ./main.py -m 31:XX:XX:XX:XX:XX -bf passwords.txt -np mynewpassword
+
+Attention, for bruteforcing the -np password is used as well. This means for the bruteforce mechanism new password option is used.
+You have to set the old pw after you cracked it by your own.
+
+-= Reboot the device =-
+# ./main.py -m 31:XX:XX:XX:XX:XX -r -p currentpassword
