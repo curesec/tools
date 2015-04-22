@@ -1,6 +1,12 @@
 # tools
 scripts for pentesting, written purely in python
 
+aesshell<br>
+Python2.7 AES CBC Mode HMAC-SHA256 Backconnect Shell<br>
+running on windows and unix (mac untested), win binary provided<br>
+nsdtool<br>
+find netgear switches in the network<br>
+https://github.com/curesec/tools/tree/master/nsdtool<br>
 geoip<br>
 find geolocation data about ips and networks, using the maxmind db<br>
 https://github.com/curesec/tools/tree/master/geoip<br>
