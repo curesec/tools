@@ -169,13 +169,13 @@ class winShell(object):
 	def readStdOut(self, q):
 		
 		while True:
-			outLine = self.stdout.readline()
+			outLine = self.stdout.read(1)
 			if outLine :
 				q.put(outLine)			
 
 	def readStdErr(self, q):
 		while True:
-			errLine = self.stderr.readline()
+			errLine = self.stderr.read(1)
 			if errLine :
 				q.put(errLine)			
 
