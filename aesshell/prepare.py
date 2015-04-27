@@ -15,7 +15,7 @@ import shutil
 
 import aes
 
-files = ["bc.py","listen.py","aes.py","bc.spec","MSVCP90.dll","MSVCR90.dll"]
+files = ["bc.py","listen.py","aes.py"]
 kFiles = ["bc.py","listen.py"]
 oDir = "aesout"
 
@@ -62,14 +62,14 @@ def insertKey(kFiles, nKey, oDir):
 		fw = open(fPath,'rw')
 		fBuf = fw.readlines()
 		for l in fBuf:
-			if l.startswith('key = '):
+			if l.startswith('\tkey = \"'):
 				# find the position in fBuf
 				kPos = fBuf.index(l)
 
 				l = l.rstrip('\n')
 				oKey = l.split('"')[1]
 				print "[*] Found old key: %s" % (oKey)
-				replaceKey = 'key = "%s"\n' % (nKey)
+				replaceKey = '\tkey = "%s"\n' % (nKey)
 				fBuf[kPos] = replaceKey
 		fw.close()
 		fw = open(fPath,'w')

