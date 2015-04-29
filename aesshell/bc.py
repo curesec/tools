@@ -379,7 +379,7 @@ def run(rip,rport,key):
 	print "[*] Finished"
 
 def main():
-	version = '0.7.2'
+	version = '0.7.3'
 	key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
 
 	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version

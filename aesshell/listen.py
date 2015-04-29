@@ -4,18 +4,84 @@
 import os
 import sys
 import time
+import hmac
 import fcntl
 import socket
 import select
+import hashlib
 import termios
 import argparse
 
-# pycrypto based aes support
-import aes
+from Crypto.Cipher import AES
 
+class AuthenticationError(Exception): pass
 
+class Crypticle(object):
+	"""Authenticated encryption class
+	
+	Encryption algorithm: AES-CBC
+	Signing algorithm: HMAC-SHA256
+
+	"""
+
+	AES_BLOCK_SIZE = 16
+	SIG_SIZE = hashlib.sha256().digest_size
+
+	def __init__(self, key_string, key_size=192):
+		self.keys = self.extract_keys(key_string, key_size)
+		self.key_size = key_size
+
+	@classmethod
+	def generate_key_string(cls, key_size=192):
+		key = os.urandom(key_size / 8 + cls.SIG_SIZE)
+		return key.encode("base64").replace("\n", "")
+
+	@classmethod
+	def extract_keys(cls, key_string, key_size):
+		key = key_string.decode("base64")
+		assert len(key) == key_size / 8 + cls.SIG_SIZE, "invalid key"
+		return key[:-cls.SIG_SIZE], key[-cls.SIG_SIZE:]
+
+	def encrypt(self, data):
+		"""encrypt data with AES-CBC and sign it with HMAC-SHA256"""
+		aes_key, hmac_key = self.keys
+		pad = self.AES_BLOCK_SIZE - len(data) % self.AES_BLOCK_SIZE
+		data = data + pad * chr(pad)
+		iv_bytes = os.urandom(self.AES_BLOCK_SIZE)
+		cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+		data = iv_bytes + cypher.encrypt(data)
+		sig = hmac.new(hmac_key, data, hashlib.sha256).digest()
+		return data + sig
+
+	def decrypt(self, data):
+		"""verify HMAC-SHA256 signature and decrypt data with AES-CBC"""
+		aes_key, hmac_key = self.keys
+		sig = data[-self.SIG_SIZE:]
+		data = data[:-self.SIG_SIZE]
+		if hmac.new(hmac_key, data, hashlib.sha256).digest() != sig:
+			return -1
+			raise AuthenticationError("message authentication failed")
+		else:
+			iv_bytes = data[:self.AES_BLOCK_SIZE]
+			data = data[self.AES_BLOCK_SIZE:]
+			cypher = AES.new(aes_key, AES.MODE_CBC, iv_bytes)
+			data = cypher.decrypt(data)
+			return data[:-ord(data[-1])]
+
+	def dumps(self, obj):
+		""" argl """
+		return self.encrypt(obj)
+
+	def loads(self, obj):
+		""" argl """
+		data = self.decrypt(obj)
+		if data == -1:
+			return -1
+
+		return self.decrypt(obj)
+																						   
 class PTY:
-	""" taken from infodox pty handler implementation
+	""" rip off from infodox pty handler implementation
 		https://github.com/infodox/python-pty-shells
 	"""
 
@@ -70,12 +136,12 @@ class PTY:
 
 def banner():
 	"""
-	   _____  ___________ _________      .__           .__  .__   
-	  /  _  \ \_   _____//   _____/ _____|  |__   ____ |  | |  |  
-	 /  /_\  \ |    __)_ \_____  \ /  ___/  |  \_/ __ \|  | |  |  
-	/    |    \|        \/        \\\\___ \|   Y  \  ___/|  |_|  |__
-	\____|__  /_______  /_______  /____  >___|  /\___  >____/____/
-		\/        \/        \/     \/     \/     \/           
+       _____  ___________ _________      .__           .__  .__   
+      /  _  \ \_   _____//   _____/ _____|  |__   ____ |  | |  |  
+     /  /_\  \ |    __)_ \_____  \ /  ___/  |  \_/ __ \|  | |  |  
+    /    |    \|        \/        \\\\___ \|   Y  \  ___/|  |_|  |__
+    \____|__  /_______  /_______  /____  >___|  /\___  >____/____/
+        \/        \/        \/     \/     \/     \/           
 	"""
 
 def bindSocket(lip,lport):
@@ -158,7 +224,7 @@ def run(lip, lport, remoteOs):
 
 def main():
 	print banner.func_doc
-	version = "0.7.2"
+	version = "0.7.3"
 	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version
 	parser = argparse.ArgumentParser(	prog = 'AESshell client (listen.py)',\
 										description = parser_description,\
