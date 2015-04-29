@@ -1,6 +1,7 @@
 ####
 #
-# taken from an online ressource, slightly modified for my usecase
+# taken from an online ressource
+# slightly modified
 #
 # http://code.activestate.com/recipes/576980/
 # PyCrypto-based authenticated symetric encryption
@@ -9,7 +10,6 @@
 import os
 import hmac
 import hashlib
-import cPickle as pickle
 from Crypto.Cipher import AES
 
 class AuthenticationError(Exception): pass
@@ -19,9 +19,9 @@ class Crypticle(object):
 	
 	Encryption algorithm: AES-CBC
 	Signing algorithm: HMAC-SHA256
+
 	"""
 
-	PICKLE_PAD = "pickle::"
 	AES_BLOCK_SIZE = 16
 	SIG_SIZE = hashlib.sha256().digest_size
 
@@ -66,17 +66,14 @@ class Crypticle(object):
 			data = cypher.decrypt(data)
 			return data[:-ord(data[-1])]
 
-	def dumps(self, obj, pickler=pickle):
-		"""pickle and encrypt a python object"""
-		return self.encrypt(self.PICKLE_PAD + pickler.dumps(obj))
-
-	def loads(self, data, pickler=pickle):
-		"""decrypt and unpickle a python object"""
-		data = self.decrypt(data)
+	def dumps(self, obj):
+		""" argl """
+		return self.encrypt(obj)
+	
+	def loads(self, obj):
+		""" argl """
+		data = self.decrypt(obj)
 		if data == -1:
 			return -1
-		# simple integrity check to verify that we got meaningful data
-		if data.startswith(self.PICKLE_PAD) == -1:
-			print "unexpected header"
-			return -1
-		return pickler.loads(data[len(self.PICKLE_PAD):])
+
+		return self.decrypt(obj)

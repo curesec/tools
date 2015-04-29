@@ -15,7 +15,7 @@ import aes
 
 
 class PTY:
-	""" rip off from infodox pty handler implementation
+	""" taken from infodox pty handler implementation
 		https://github.com/infodox/python-pty-shells
 	"""
 
@@ -158,7 +158,7 @@ def run(lip, lport, remoteOs):
 
 def main():
 	print banner.func_doc
-	version = "0.7"
+	version = "0.7.2"
 	parser_description = "AESshell v%s - backconnect shell for windows and linux\n\t\tusing AES CBC Mode and HMAC-SHA256\n\t\tspring 2015 by Marco Lux <ping@curesec.com>" % version
 	parser = argparse.ArgumentParser(	prog = 'AESshell client (listen.py)',\
 										description = parser_description,\
