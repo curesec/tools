@@ -12,10 +12,33 @@ import os
 import sys
 import time
 import shutil
+import hmac
+import hashlib
+from Crypto.Cipher import AES
 
-import aes
+class AuthenticationError(Exception): pass
 
-files = ["bc.py","listen.py","aes.py"]
+class Crypticle(object):
+	"""Authenticated encryption class
+	
+	Encryption algorithm: AES-CBC
+	Signing algorithm: HMAC-SHA256
+
+	"""
+
+	AES_BLOCK_SIZE = 16
+	SIG_SIZE = hashlib.sha256().digest_size
+
+	def __init__(self, key_string, key_size=192):
+		self.keys = self.extract_keys(key_string, key_size)
+		self.key_size = key_size
+
+	@classmethod
+	def generate_key_string(cls, key_size=192):
+		key = os.urandom(key_size / 8 + cls.SIG_SIZE)
+		return key.encode("base64").replace("\n", "")
+
+files = ["bc.py","listen.py"]
 kFiles = ["bc.py","listen.py"]
 oDir = "aesout"
 
@@ -51,7 +74,7 @@ def copyFiles(files,oDir):
 
 # create new key
 def createKey():
-	nKey = aes.Crypticle.generate_key_string()
+	nKey = Crypticle.generate_key_string()
 	print "[*] New Key: %s" % (nKey)
 	return nKey
 
