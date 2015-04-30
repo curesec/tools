@@ -165,7 +165,7 @@ def run(lip, lport, remoteOs):
 	conn, addr = s.accept()
 
 	# initialize aes class
-	ac=aes.Crypticle(key)
+	ac=Crypticle(key)
 
 	# yeah, we just accept one client ;)
 	inputs = []
