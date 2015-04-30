@@ -77,7 +77,6 @@ $ python bc.py -rip 192.168.1.1 -rport 1443
 
 Files
 -----
-aes.py 		- crypto import, needed by listen.py (integrated into bc.py)
 bc.exe 		- compiled with pyinstaller for windows (Tested: WinXP/Win7/Win8)
 bc.spec 	- spec file for pyinstaller
 bc.py 		- the backconnect shell
