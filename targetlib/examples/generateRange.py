@@ -1,4 +1,6 @@
 #!/usr/bin/env python2
+#
+# ./$0 1.1.1.1 1.1.1.5
 
 import sys
 import targetlib
